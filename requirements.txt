@@ -1,0 +1,9 @@
+# Telegram Bot framework
+aiogram==3.27.0
+
+# Anthropic SDK
+anthropic==0.91.0
+
+# Configuration
+pydantic==2.12.5
+pydantic-settings==2.13.1
