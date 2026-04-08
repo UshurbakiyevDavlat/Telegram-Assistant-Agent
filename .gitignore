@@ -1,5 +1,27 @@
+# Environment
 .env
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Data (SQLite memory DB)
+data/
+*.db
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

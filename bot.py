@@ -3,9 +3,10 @@ Entry point for the Telegram Agent bot.
 
 Wires together:
   - AppConfig (pydantic-settings)
-  - ClaudeService (Anthropic SDK + history)
+  - ClaudeService (Anthropic SDK + agentic tool_use loop)
+  - Tool system (KB, Notion, Web Search, Memory)
   - AuthMiddleware (user_id whitelist)
-  - Root router (commands + personal chat)
+  - Root router (commands + group + personal)
   - Dispatcher + Bot (aiogram 3)
 
 Run:
@@ -24,6 +25,7 @@ from config import AppConfig
 from handlers import root_router
 from middleware import AuthMiddleware
 from services import ClaudeService
+from tools import init_tools, close_tools
 
 # ------------------------------------------------------------------
 # Logging
@@ -44,14 +46,13 @@ logger = logging.getLogger(__name__)
 
 def create_dispatcher(config: AppConfig) -> Dispatcher:
     """
-    All wiring in one place, following the factory pattern.
+    All wiring in one place — factory pattern.
     Services are injected into Dispatcher's workflow_data so they
     become available as handler arguments automatically.
     """
     claude_service = ClaudeService(config.claude)
 
     dp = Dispatcher(
-        # MemoryStorage is fine for Phase 1 (no FSM states yet)
         storage=MemoryStorage(),
         # Injected into every handler via dependency injection
         config=config,
@@ -74,14 +75,20 @@ def create_dispatcher(config: AppConfig) -> Dispatcher:
 async def main() -> None:
     config = AppConfig()
 
+    # Initialize tool system (KB, Notion, Web Search, Memory)
+    await init_tools(config)
+
     bot = Bot(
         token=config.telegram.bot_token.get_secret_value(),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = create_dispatcher(config)
 
-    logger.info("Starting Telegram Agent (model: %s)", config.claude.model)
-    logger.info("Allowed user IDs: %s", config.telegram.allowed_ids or "NONE — bot is closed")
+    logger.info("Starting Telegram Agent")
+    logger.info("Personal model: %s", config.claude.personal_model)
+    logger.info("Family model: %s", config.claude.family_model)
+    logger.info("Allowed user IDs: %s", config.telegram.allowed_ids or "NONE")
+    logger.info("KB endpoint: %s", config.kb.url)
 
     # Drop pending updates accumulated while the bot was offline
     await bot.delete_webhook(drop_pending_updates=True)
@@ -89,6 +96,7 @@ async def main() -> None:
     try:
         await dp.start_polling(bot)
     finally:
+        await close_tools()
         await bot.session.close()
         logger.info("Bot stopped.")
 

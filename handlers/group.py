@@ -5,8 +5,8 @@ Responds only when:
   - The bot is mentioned via @username
   - The user replies to the bot's message
 
-Does NOT respond to every message in the group — only when explicitly addressed.
-Uses a separate per-group history (not per-user) so the family shares context.
+Uses chat_simple() — no tools, separate family system prompt.
+History is shared per group (keyed by chat_id).
 """
 import logging
 
@@ -64,19 +64,17 @@ async def group_message_handler(
     """
     Handle messages in the family group chat.
     Only responds if the bot is mentioned or the message is a reply to the bot.
-    Uses chat_id (negative number) as the history key — shared context for all family members.
     """
     if not message.text:
         return
 
-    # Only respond if explicitly addressed
     mentioned = _is_bot_mentioned(message)
     replied = _is_reply_to_bot(message)
 
     if not mentioned and not replied:
         return
 
-    # Build the user text — strip the @mention if present
+    # Build user text — strip @mention, prefix with sender name
     user_text = message.text
     if mentioned and message.bot:
         user_text = _strip_bot_mention(user_text, message.bot.username or "")  # type: ignore[union-attr]
@@ -84,11 +82,10 @@ async def group_message_handler(
     if not user_text.strip():
         return
 
-    # Prefix with user name for context in group setting
     sender_name = message.from_user.first_name if message.from_user else "Кто-то"
     prefixed_text = f"[{sender_name}]: {user_text}"
 
-    # Use negative chat_id as history key — shared history for the whole group
+    # Shared history per group — keyed by chat_id
     history_key = message.chat.id
 
     await message.bot.send_chat_action(  # type: ignore[union-attr]
@@ -97,17 +94,16 @@ async def group_message_handler(
     )
 
     try:
-        reply = await claude_service.chat(
-            user_id=history_key,
+        reply = await claude_service.chat_simple(
+            chat_id=history_key,
             user_text=prefixed_text,
             system_prompt=config.claude.family_system_prompt,
         )
     except Exception:
         logger.exception("Claude error in group chat %s", message.chat.id)
-        await message.reply("⚠️ Не смог обработать запрос. Попробуйте ещё раз.")
+        await message.reply("Не смог обработать запрос. Попробуйте ещё раз.")
         return
 
-    # Reply to the specific message — cleaner in group context
     if len(reply) <= 4096:
         await message.reply(reply, parse_mode="Markdown")
     else:
@@ -119,7 +115,7 @@ async def group_message_handler(
 
 
 def _split_message(text: str, max_length: int = 4096) -> list[str]:
-    """Split a long message into chunks that fit Telegram's limit."""
+    """Split a long message into chunks."""
     chunks = []
     while text:
         if len(text) <= max_length:
