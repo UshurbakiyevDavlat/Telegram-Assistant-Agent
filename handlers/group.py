@@ -10,7 +10,7 @@ History is shared per group (keyed by chat_id).
 """
 import logging
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction, ChatType
 from aiogram.types import Message
 
@@ -25,12 +25,9 @@ group_router = Router(name="group")
 group_router.message.filter(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
 
 
-def _is_bot_mentioned(message: Message) -> bool:
+def _is_bot_mentioned(message: Message, bot_username: str) -> bool:
     """Check if the bot is mentioned via @username in the message text."""
-    if not message.entities or not message.text:
-        return False
-    bot_username = message.bot.username if message.bot else None  # type: ignore[union-attr]
-    if not bot_username:
+    if not message.entities or not message.text or not bot_username:
         return False
     for entity in message.entities:
         if entity.type == "mention":
@@ -40,14 +37,14 @@ def _is_bot_mentioned(message: Message) -> bool:
     return False
 
 
-def _is_reply_to_bot(message: Message) -> bool:
+def _is_reply_to_bot(message: Message, bot_id: int) -> bool:
     """Check if the message is a reply to the bot's own message."""
     if not message.reply_to_message:
         return False
     reply_from = message.reply_to_message.from_user
-    if not reply_from or not message.bot:
+    if not reply_from:
         return False
-    return reply_from.id == message.bot.id  # type: ignore[union-attr]
+    return reply_from.id == bot_id
 
 
 def _strip_bot_mention(text: str, bot_username: str) -> str:
@@ -58,6 +55,7 @@ def _strip_bot_mention(text: str, bot_username: str) -> str:
 @group_router.message(F.text)
 async def group_message_handler(
     message: Message,
+    bot: Bot,
     claude_service: ClaudeService,
     config: AppConfig,
 ) -> None:
@@ -68,16 +66,17 @@ async def group_message_handler(
     if not message.text:
         return
 
-    mentioned = _is_bot_mentioned(message)
-    replied = _is_reply_to_bot(message)
+    bot_user = await bot.get_me()
+    mentioned = _is_bot_mentioned(message, bot_user.username or "")
+    replied = _is_reply_to_bot(message, bot_user.id)
 
     if not mentioned and not replied:
         return
 
     # Build user text — strip @mention, prefix with sender name
     user_text = message.text
-    if mentioned and message.bot:
-        user_text = _strip_bot_mention(user_text, message.bot.username or "")  # type: ignore[union-attr]
+    if mentioned:
+        user_text = _strip_bot_mention(user_text, bot_user.username or "")
 
     if not user_text.strip():
         return
@@ -88,10 +87,7 @@ async def group_message_handler(
     # Shared history per group — keyed by chat_id
     history_key = message.chat.id
 
-    await message.bot.send_chat_action(  # type: ignore[union-attr]
-        chat_id=message.chat.id,
-        action=ChatAction.TYPING,
-    )
+    await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
 
     try:
         reply = await claude_service.chat_simple(
