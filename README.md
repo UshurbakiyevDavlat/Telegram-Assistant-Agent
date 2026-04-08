@@ -111,6 +111,7 @@ aiogram 3 (Python)
 |------------|:-----------:|----------|
 | `TELEGRAM_BOT_TOKEN` | да | Токен от @BotFather |
 | `TELEGRAM_ALLOWED_USER_IDS` | да | ID пользователей через запятую |
+| `TELEGRAM_ALLOWED_GROUP_IDS` | нет | ID разрешённых групповых чатов (если пусто — все группы) |
 | `CLAUDE_API_KEY` | да | Ключ Anthropic API |
 | `CLAUDE_PERSONAL_MODEL` | нет | Модель для личного чата (default: claude-opus-4-6) |
 | `CLAUDE_FAMILY_MODEL` | нет | Модель для семейного чата (default: claude-sonnet-4-5) |

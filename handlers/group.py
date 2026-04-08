@@ -77,6 +77,8 @@ async def group_message_handler(
     if not mentioned and not replied:
         return
 
+    logger.info("Group chat_id=%s, sender=%s", message.chat.id, message.from_user.id if message.from_user else "?")
+
     # Build user text — strip @mention, prefix with sender name
     user_text = message.text
     if mentioned:

@@ -14,6 +14,9 @@ class TelegramConfig(BaseSettings):
     bot_token: SecretStr
     # Comma-separated list of allowed Telegram user IDs (personal mode)
     allowed_user_ids: str = ""
+    # Comma-separated list of allowed group chat IDs (family mode)
+    # If empty, ALL groups are allowed (open mode)
+    allowed_group_ids: str = ""
 
     @property
     def allowed_ids(self) -> set[int]:
@@ -21,6 +24,13 @@ class TelegramConfig(BaseSettings):
         if not self.allowed_user_ids:
             return set()
         return {int(uid.strip()) for uid in self.allowed_user_ids.split(",") if uid.strip()}
+
+    @property
+    def allowed_groups(self) -> set[int]:
+        """Parse TELEGRAM_ALLOWED_GROUP_IDS=-100123,-100456 into a set of ints."""
+        if not self.allowed_group_ids:
+            return set()
+        return {int(gid.strip()) for gid in self.allowed_group_ids.split(",") if gid.strip()}
 
 
 class ClaudeConfig(BaseSettings):
