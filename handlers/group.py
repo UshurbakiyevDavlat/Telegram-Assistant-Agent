@@ -16,6 +16,10 @@ from aiogram.types import Message
 
 from config import AppConfig
 from services import ClaudeService
+from tools.definitions import TOOL_DEFINITIONS
+
+# Only web_search for family mode — no personal data tools
+FAMILY_TOOLS = [t for t in TOOL_DEFINITIONS if t["name"] == "web_search"]
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +98,7 @@ async def group_message_handler(
             chat_id=history_key,
             user_text=prefixed_text,
             system_prompt=config.claude.family_system_prompt,
+            tools=FAMILY_TOOLS,
         )
     except Exception:
         logger.exception("Claude error in group chat %s", message.chat.id)

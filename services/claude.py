@@ -159,7 +159,7 @@ class ClaudeService:
         return reply or "⚠️ Превышен лимит итераций инструментов."
 
     # ------------------------------------------------------------------
-    # Family chat — simple, no tools
+    # Family chat — with optional limited tools (e.g. web_search only)
     # ------------------------------------------------------------------
 
     async def chat_simple(
@@ -167,31 +167,76 @@ class ClaudeService:
         chat_id: int,
         user_text: str,
         system_prompt: str,
+        tools: list[dict] | None = None,
     ) -> str:
         """
-        Simple chat without tools (for family group mode).
+        Family group chat mode.
+        Optionally accepts a limited set of tools (e.g. web_search only).
         Uses chat_id as history key.
         """
         self._append(chat_id, role="user", content=user_text)
 
         model = self.get_model(chat_id, mode="family")
 
-        try:
-            response = await self._client.messages.create(
-                model=model,
-                max_tokens=self._config.max_tokens,
-                system=system_prompt,
-                messages=self._history[chat_id],  # type: ignore[arg-type]
-            )
-        except anthropic.APIError as exc:
-            logger.error("Claude API error for chat %s: %s", chat_id, exc)
-            self._history[chat_id].pop()
-            raise
+        # Build API kwargs — only include tools if provided
+        kwargs: dict = {
+            "model": model,
+            "max_tokens": self._config.max_tokens,
+            "system": system_prompt,
+            "messages": self._history[chat_id],
+        }
+        if tools:
+            kwargs["tools"] = tools
 
-        reply = self._extract_text(response.content)
-        self._append(chat_id, role="assistant", content=reply)
+        max_turns = self._config.max_tool_turns if tools else 1
+
+        for turn in range(max_turns):
+            try:
+                response = await self._client.messages.create(**kwargs)  # type: ignore[arg-type]
+            except anthropic.APIError as exc:
+                logger.error("Claude API error for chat %s: %s", chat_id, exc)
+                if turn == 0:
+                    self._history[chat_id].pop()
+                raise
+
+            # Append assistant response
+            self._append(chat_id, role="assistant", content=response.content)
+
+            if response.stop_reason == "end_turn":
+                reply = self._extract_text(response.content)
+                self._trim_history(chat_id)
+                return reply
+
+            if response.stop_reason == "tool_use" and tools:
+                # Execute tool calls (e.g. web_search)
+                tool_results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        logger.info("Family tool call: %s(%s)", block.name, block.input)
+                        result = await execute_tool(block.name, block.input)
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": result,
+                            }
+                        )
+                self._append(chat_id, role="user", content=tool_results)
+                # Update messages in kwargs for next iteration
+                kwargs["messages"] = self._history[chat_id]
+                continue
+
+            # No tools or max_tokens — return what we have
+            reply = self._extract_text(response.content)
+            self._trim_history(chat_id)
+            return reply
+
+        # Max turns
         self._trim_history(chat_id)
-        return reply
+        return self._extract_text(
+            self._history[chat_id][-1].get("content", [])
+            if self._history[chat_id] else []
+        ) or "⚠️ Превышен лимит итераций."
 
     # ------------------------------------------------------------------
     # History management
