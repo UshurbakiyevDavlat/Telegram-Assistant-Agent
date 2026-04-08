@@ -15,7 +15,7 @@ mcp==1.27.0
 aiosqlite==0.22.1
 
 # Web search (DuckDuckGo)
-duckduckgo-search==8.1.1
+ddgs>=6.0
 
 # HTTP client (Notion API, general HTTP calls)
 httpx>=0.27
