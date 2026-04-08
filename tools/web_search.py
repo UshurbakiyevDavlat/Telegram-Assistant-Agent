@@ -26,10 +26,7 @@ class WebSearchTool:
 
         try:
             ddgs = DDGS()
-            results = ddgs.text(
-                keywords=query,
-                max_results=max_results,
-            )
+            results = ddgs.text(query, max_results=max_results)
 
             if not results:
                 return f"No web results found for '{query}'."
