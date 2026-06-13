@@ -12,6 +12,7 @@ import logging
 import anthropic
 from aiogram import F, Router
 from aiogram.enums import ChatAction, ChatType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message
 
 from services import ClaudeService
@@ -172,15 +173,31 @@ async def _handle_api_error(message: Message, user_id: int, exc: anthropic.APIEr
 
 
 async def _send_reply(message: Message, reply: str) -> None:
-    """Send reply, splitting if it exceeds Telegram's 4096 char limit."""
-    if not reply:
-        reply = "_(пустой ответ)_"
+    """Send reply, splitting if it exceeds Telegram's 4096 char limit.
 
-    if len(reply) <= 4096:
-        await message.answer(reply, parse_mode="Markdown")
-    else:
-        for chunk in _split_message(reply):
-            await message.answer(chunk, parse_mode="Markdown")
+    Telegram's legacy Markdown parser is fragile: an unbalanced *, _ or `
+    in the model output makes the whole send fail with TelegramBadRequest.
+    On any parse error we retry the same chunk as plain text so the user
+    always gets the content (just without formatting) instead of silence.
+    """
+    if not reply:
+        reply = "(пустой ответ)"
+
+    chunks = [reply] if len(reply) <= 4096 else _split_message(reply)
+    for chunk in chunks:
+        await _send_chunk(message, chunk)
+
+
+async def _send_chunk(message: Message, chunk: str) -> None:
+    """Send one chunk, falling back to plain text if Markdown is invalid."""
+    try:
+        await message.answer(chunk, parse_mode="Markdown")
+    except TelegramBadRequest as exc:
+        if "can't parse entities" in str(exc).lower() or "parse" in str(exc).lower():
+            logger.warning("Markdown parse failed, retrying as plain text: %s", exc)
+            await message.answer(chunk)  # no parse_mode → plain text
+        else:
+            raise
 
 
 def _split_message(text: str, max_length: int = 4096) -> list[str]:

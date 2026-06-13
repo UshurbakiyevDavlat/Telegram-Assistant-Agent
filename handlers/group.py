@@ -12,6 +12,7 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction, ChatType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message
 
 from config import AppConfig
@@ -107,14 +108,17 @@ async def group_message_handler(
         await message.reply("Не смог обработать запрос. Попробуйте ещё раз.")
         return
 
-    if len(reply) <= 4096:
-        await message.reply(reply, parse_mode="Markdown")
-    else:
-        for i, chunk in enumerate(_split_message(reply)):
-            if i == 0:
-                await message.reply(chunk, parse_mode="Markdown")
+    chunks = [reply] if len(reply) <= 4096 else _split_message(reply)
+    for i, chunk in enumerate(chunks):
+        send = message.reply if i == 0 else message.answer
+        try:
+            await send(chunk, parse_mode="Markdown")
+        except TelegramBadRequest as exc:
+            if "parse" in str(exc).lower():
+                logger.warning("Markdown parse failed, retrying as plain text: %s", exc)
+                await send(chunk)  # plain text fallback
             else:
-                await message.answer(chunk, parse_mode="Markdown")
+                raise
 
 
 def _split_message(text: str, max_length: int = 4096) -> list[str]:
