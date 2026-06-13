@@ -78,6 +78,18 @@ async def execute_tool(name: str, tool_input: dict) -> str:
                 )
             case "kb_get_facts":
                 return await _kb.get_facts()  # type: ignore[union-attr]
+            case "kb_add_document":
+                return await _kb.add_document(  # type: ignore[union-attr]
+                    text=tool_input["text"],
+                    title=tool_input["title"],
+                    doc_date=tool_input.get("doc_date"),
+                )
+            case "kb_add_file":
+                return await _kb.add_file(  # type: ignore[union-attr]
+                    path=tool_input["path"],
+                    title=tool_input.get("title"),
+                    doc_date=tool_input.get("doc_date"),
+                )
 
             # ── Notion ────────────────────────────────────────────────
             case "notion_search":

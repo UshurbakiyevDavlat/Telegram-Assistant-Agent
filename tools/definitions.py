@@ -47,6 +47,66 @@ TOOL_DEFINITIONS: list[dict] = [
             "properties": {},
         },
     },
+    {
+        "name": "kb_add_document",
+        "description": (
+            "Save text into the personal knowledge base (KB) — the PRIMARY way to "
+            "remember anything long-term. Use this WHENEVER the user shares something "
+            "worth keeping: facts, events, plans, people, health info, relationship "
+            "notes, decisions, conversation summaries — or explicitly says "
+            "'запомни' / 'запиши' / 'сохрани' / 'remember this'. "
+            "This is the DEFAULT store (not Notion, not short-term memory). "
+            "Write a clear, self-contained title and well-structured text "
+            "(Markdown ok) so it's findable later via kb_search. "
+            "Always confirm to the user what you saved."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Short, specific, self-contained title (the user will search by it later).",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The full content to remember. Structure it clearly; Markdown is fine.",
+                },
+                "doc_date": {
+                    "type": "string",
+                    "description": "Date of the fact/event in YYYY-MM-DD (optional, defaults to today).",
+                },
+            },
+            "required": ["title", "text"],
+        },
+    },
+    {
+        "name": "kb_add_file",
+        "description": (
+            "Index a file that the user sent (PDF, .txt, .md) into the knowledge base. "
+            "The file has already been downloaded to the server — pass its absolute "
+            "'path' (you are given it in the message). Use when the user sends a "
+            "document and wants it remembered/analyzed, or asks to save a file to KB. "
+            "Always confirm what was indexed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path to the downloaded file on the server.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Title for the document (optional, defaults to filename).",
+                },
+                "doc_date": {
+                    "type": "string",
+                    "description": "Document date YYYY-MM-DD (optional, defaults to today).",
+                },
+            },
+            "required": ["path"],
+        },
+    },
     # ── Notion ────────────────────────────────────────────────────────────
     {
         "name": "notion_search",
@@ -72,7 +132,7 @@ TOOL_DEFINITIONS: list[dict] = [
             "Create a new task/page in the Notion tasks database. "
             "Use ONLY when the user EXPLICITLY mentions Notion or asks to create a task/todo there. "
             "Do NOT use this for general 'remember this' or 'save this' requests — "
-            "those go to KB (memory_store) by default."
+            "those go to KB (kb_add_document) by default."
         ),
         "input_schema": {
             "type": "object",
@@ -118,10 +178,11 @@ TOOL_DEFINITIONS: list[dict] = [
     {
         "name": "memory_store",
         "description": (
-            "Store a fact or preference for long-term memory. "
-            "Use when the user shares personal info, preferences, or asks to remember something. "
-            "Examples: 'my stack is Python + Go', 'preferred language: Russian', "
-            "'sister's name is Aisha'. Persists across bot restarts."
+            "DEPRECATED for general use — prefer kb_add_document for almost everything. "
+            "This is a tiny local key-value store, separate from the searchable KB. "
+            "Only use it for very short bot-operational settings (e.g. 'preferred reply "
+            "language: Russian'). Any real content — facts, events, people, notes — "
+            "must go to kb_add_document instead so it lands in the searchable KB."
         ),
         "input_schema": {
             "type": "object",

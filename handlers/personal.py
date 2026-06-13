@@ -8,6 +8,8 @@ Photos are sent as base64 images via Claude Vision.
 import base64
 import io
 import logging
+import re
+from pathlib import Path
 
 import anthropic
 from aiogram import F, Router
@@ -18,6 +20,11 @@ from aiogram.types import Message
 from services import ClaudeService
 
 logger = logging.getLogger(__name__)
+
+# Where downloaded documents are stored so the KB MCP (same VPS) can index them.
+UPLOADS_DIR = Path("/opt/telegram-agent/data/uploads")
+# File extensions the KB indexer (kb_add_file) understands.
+KB_INDEXABLE_EXT = {".md", ".txt", ".pdf"}
 
 personal_router = Router(name="personal")
 
@@ -123,17 +130,41 @@ async def personal_document_handler(
 
     doc = message.document
     caption = message.caption or ""
-    text = (
-        f"[Пользователь отправил файл: {doc.file_name}, "  # type: ignore[union-attr]
-        f"размер: {doc.file_size} байт, "  # type: ignore[union-attr]
-        f"тип: {doc.mime_type}]"  # type: ignore[union-attr]
-    )
-    if caption:
-        text += f"\n{caption}"
-    else:
-        text += "\nЧто ты можешь сказать об этом файле?"
+    file_name = doc.file_name or "file"  # type: ignore[union-attr]
+    ext = Path(file_name).suffix.lower()
 
     await _send_typing(message)
+
+    # Download the file to local disk so the KB MCP (same VPS) can index it
+    # by absolute path. We always download; for KB-indexable types we hand the
+    # path to Claude so it can call kb_add_file on request.
+    saved_path: str | None = None
+    if ext in KB_INDEXABLE_EXT:
+        try:
+            saved_path = await _download_document(message, doc, file_name)
+        except Exception as exc:
+            logger.error("Failed to download document from user %s: %s", user_id, exc)
+
+    if saved_path:
+        text = (
+            f"[Пользователь отправил файл: {file_name} "
+            f"({doc.mime_type}, {doc.file_size} байт). "  # type: ignore[union-attr]
+            f"Файл сохранён на сервере по пути: {saved_path}]\n"
+            f"Если пользователь просит запомнить/сохранить/проанализировать файл — "
+            f"вызови kb_add_file с этим путём (path={saved_path})."
+        )
+    else:
+        # Non-indexable type (or download failed): fall back to metadata only.
+        text = (
+            f"[Пользователь отправил файл: {file_name}, "
+            f"размер: {doc.file_size} байт, "  # type: ignore[union-attr]
+            f"тип: {doc.mime_type}. "  # type: ignore[union-attr]
+            f"Содержимое недоступно для индексации (поддерживаются .md, .txt, .pdf).]"
+        )
+    if caption:
+        text += f"\n{caption}"
+    elif not saved_path:
+        text += "\nЧто ты можешь сказать об этом файле?"
 
     try:
         reply = await claude_service.chat(user_id=user_id, content=text)
@@ -142,6 +173,17 @@ async def personal_document_handler(
         return
 
     await _send_reply(message, reply)
+
+
+async def _download_document(message: Message, doc, file_name: str) -> str:
+    """Download a Telegram document to UPLOADS_DIR, return its absolute path."""
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    # Sanitize the filename and prefix with the unique file_id to avoid clashes.
+    safe_name = re.sub(r"[^\w.\-]", "_", file_name)
+    dest = UPLOADS_DIR / f"{doc.file_id}_{safe_name}"
+    file = await message.bot.get_file(doc.file_id)  # type: ignore[union-attr]
+    await message.bot.download_file(file.file_path, str(dest))  # type: ignore[union-attr]
+    return str(dest)
 
 
 # ------------------------------------------------------------------
