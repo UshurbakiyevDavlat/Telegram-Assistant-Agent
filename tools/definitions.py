@@ -70,7 +70,9 @@ TOOL_DEFINITIONS: list[dict] = [
         "name": "notion_create_task",
         "description": (
             "Create a new task/page in the Notion tasks database. "
-            "Use when the user asks to create a task, reminder, or todo."
+            "Use ONLY when the user EXPLICITLY mentions Notion or asks to create a task/todo there. "
+            "Do NOT use this for general 'remember this' or 'save this' requests — "
+            "those go to KB (memory_store) by default."
         ),
         "input_schema": {
             "type": "object",
