@@ -11,9 +11,13 @@ TOOL_DEFINITIONS: list[dict] = [
         "name": "kb_search",
         "description": (
             "Search the personal knowledge base (Notion pages, session summaries, "
-            "project docs — 500+ chunks). Use FIRST for any question about: "
-            "projects, architecture decisions, past conversations, technical plans, "
-            "tools, workflows. Returns relevant text chunks ranked by relevance."
+            "project docs, health/medical records, finance data, personal facts — 500+ chunks). "
+            "Use FIRST for ANY question about: projects, architecture, past conversations, "
+            "technical plans, tools, workflows, health/medical info (diagnoses, test results, "
+            "appointments), finances/investments, personal context about the user or his family. "
+            "IMPORTANT: if the first results are about a family member (e.g. father) — "
+            "call kb_search again with the user's own name (Давлат / Давлатбек) to find his personal data. "
+            "Returns relevant text chunks ranked by relevance."
         ),
         "input_schema": {
             "type": "object",
