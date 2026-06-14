@@ -110,7 +110,19 @@ class ClaudeService:
                 )
             except anthropic.APIError as exc:
                 logger.error("Claude API error (turn %d) for %s: %s", turn, user_id, exc)
-                # Remove the user message we appended so history stays clean
+                # A 400 about tool_use/tool_result means the stored history is
+                # corrupted (e.g. an earlier turn was truncated mid tool_use).
+                # Reset it so the user isn't stuck failing on every message.
+                msg = str(exc).lower()
+                if "tool_use" in msg or "tool_result" in msg:
+                    logger.warning("Corrupted tool history for %s — clearing.", user_id)
+                    self.clear_history(user_id)
+                    return (
+                        "⚠️ Контекст диалога был повреждён (прошлый ответ оборвался "
+                        "на вызове инструмента). Я очистил историю — повтори, пожалуйста, "
+                        "последнее сообщение."
+                    )
+                # Otherwise: drop the user message we appended so history stays clean
                 if turn == 0:
                     self._history[user_id].pop()
                 raise
@@ -144,7 +156,21 @@ class ClaudeService:
                 # Continue the loop — Claude will process tool results
 
             elif response.stop_reason == "max_tokens":
-                # Hit token limit mid-response — return what we have
+                # Hit token limit mid-response. If the truncated turn contains a
+                # tool_use block, that block is incomplete — no tool_result can
+                # follow it, so it would poison history and 400 every later
+                # request. Drop the broken assistant turn instead of keeping it.
+                has_tool_use = any(
+                    getattr(b, "type", None) == "tool_use" for b in response.content
+                )
+                if has_tool_use:
+                    self._history[user_id].pop()  # remove the broken assistant turn
+                    self._trim_history(user_id)
+                    return (
+                        "⚠️ Запрос получился слишком большой и оборвался на середине "
+                        "(вызов инструмента не поместился в лимит). Попробуй разбить "
+                        "на части или сформулировать короче."
+                    )
                 reply = self._extract_text(response.content)
                 self._trim_history(user_id)
                 return reply + "\n\n⚠️ _Ответ обрезан из-за лимита токенов._"

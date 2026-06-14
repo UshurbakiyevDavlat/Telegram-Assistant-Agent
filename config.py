@@ -40,7 +40,7 @@ class ClaudeConfig(BaseSettings):
     # Default models per mode — can be overridden at runtime via /model
     personal_model: str = "claude-opus-4-6"
     family_model: str = "claude-sonnet-4-5-20241022"
-    max_tokens: int = 4096
+    max_tokens: int = 8192
     # How many past messages to keep per user (user + assistant pairs)
     history_limit: int = 30
     # Max tool_use loop iterations per request
