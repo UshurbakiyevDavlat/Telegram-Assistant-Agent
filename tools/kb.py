@@ -77,6 +77,23 @@ class KBTool:
             args["doc_date"] = doc_date
         return await self._call("kb_add_document", args, "Document added (no detail returned).")
 
+    async def update_document(
+        self,
+        text: str,
+        title: str,
+        source_type: str = "manual",
+        doc_date: str | None = None,
+    ) -> str:
+        """Replace an existing KB document (exact title match) with new text.
+
+        Deletes all chunks of the document with this exact title and re-adds it.
+        Use to UPDATE an existing record instead of creating a duplicate.
+        """
+        args: dict = {"text": text, "title": title, "source_type": source_type}
+        if doc_date:
+            args["doc_date"] = doc_date
+        return await self._call("kb_upsert_document", args, "Document updated (no detail returned).")
+
     async def add_file(
         self,
         path: str,

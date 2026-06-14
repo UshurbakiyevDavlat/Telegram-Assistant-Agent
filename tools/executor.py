@@ -90,6 +90,12 @@ async def execute_tool(name: str, tool_input: dict) -> str:
                     title=tool_input.get("title"),
                     doc_date=tool_input.get("doc_date"),
                 )
+            case "kb_update_document":
+                return await _kb.update_document(  # type: ignore[union-attr]
+                    text=tool_input["text"],
+                    title=tool_input["title"],
+                    doc_date=tool_input.get("doc_date"),
+                )
 
             # ── Notion ────────────────────────────────────────────────
             case "notion_search":

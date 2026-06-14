@@ -58,6 +58,9 @@ TOOL_DEFINITIONS: list[dict] = [
             "This is the DEFAULT store (not Notion, not short-term memory). "
             "Write a clear, self-contained title and well-structured text "
             "(Markdown ok) so it's findable later via kb_search. "
+            "IMPORTANT: use this only for a NEW topic. If a document on this topic "
+            "already exists (check with kb_search first), use kb_update_document "
+            "instead so you don't create duplicates. "
             "Always confirm to the user what you saved."
         ),
         "input_schema": {
@@ -105,6 +108,39 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
             },
             "required": ["path"],
+        },
+    },
+    {
+        "name": "kb_update_document",
+        "description": (
+            "UPDATE an existing KB document — replaces the document with the EXACT "
+            "same title with new text (deletes old chunks, re-indexes new). "
+            "Use this INSTEAD of kb_add_document whenever you are revising, correcting, "
+            "appending to, or refreshing a topic that ALREADY exists in the KB "
+            "(e.g. a running finance summary, a person's profile, an ongoing plan). "
+            "This is how you AVOID creating duplicate documents. "
+            "Workflow: first kb_search the topic; if a document already covers it, "
+            "rewrite its full text and call kb_update_document with that document's exact title. "
+            "Only use kb_add_document when the topic is genuinely NEW. "
+            "Pass the COMPLETE new text (it replaces everything, not appends at DB level)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "EXACT title of the existing document to replace (must match precisely).",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "The complete new content (fully replaces the old document).",
+                },
+                "doc_date": {
+                    "type": "string",
+                    "description": "Date YYYY-MM-DD (optional, defaults to today).",
+                },
+            },
+            "required": ["title", "text"],
         },
     },
     # ── Notion ────────────────────────────────────────────────────────────
